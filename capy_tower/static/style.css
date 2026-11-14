@@ -113,3 +113,19 @@ footer { color: var(--mute); padding: 8px 16px 18px; font-size: 12px; }
 .preset img { width: 100%; height: 72px; object-fit: cover; border-radius: 6px; }
 .preset b { font-size: 12px; }
 .preset small { font-size: 10.5px; color: var(--mute); line-height: 1.25; }
+/* readable decision log */
+.logrows { display: grid; gap: 3px; max-height: 190px; overflow: auto; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+.lr { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; background: #0b1424; border-radius: 6px; padding: 4px 8px; }
+.lt { color: var(--mute); }
+.ld { color: var(--ink); font-weight: 700; }
+.le { color: var(--blue); }
+.lc { color: var(--red); font-weight: 800; }
+.lo { color: var(--green); }
+.la { color: var(--amber); }
+.la.tpl { color: #d0a24a; font-style: italic; }
+.lm { color: var(--mute); margin-left: auto; }
+.lacts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.rawlog summary { cursor: pointer; color: var(--mute); font-size: 12px; margin-top: 6px; }
+/* tighter presets, bigger speech */
+.preset img { height: 58px; }
+.say { font-size: 19px; }

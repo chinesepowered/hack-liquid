@@ -195,8 +195,8 @@
 
   // Preset photos, each checked with d1-2B on the board beforehand (static/presets.json).
   const PRESETS = [
-    ['capy_baby', 'Baby capybara'], ['capy_family', 'Capybara family'], ['capy_portrait', 'Capybara'],
-    ['dog', 'Dog'], ['deer', 'Deer'], ['goose', 'Goose'], ['car', 'Car'], ['cone', 'Traffic cone'],
+    ['deer', 'Deer'], ['coyote', 'Coyote'], ['goose', 'Canada goose'], ['dog', 'Stray dog'],
+    ['person', 'Person on foot'], ['tug', 'Baggage tug'], ['drone', 'Drone'], ['cone', 'Debris: traffic cone'],
   ];
   async function loadPresets() {
     let checked = {};
@@ -342,8 +342,19 @@
     ];
     $('#metrics').innerHTML = tiles.map(([k, v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
 
-    // log tail
-    $('#log').textContent = s.events.slice().reverse().map((e) => JSON.stringify(e)).join('\n');
+    // log tail: readable rows, raw JSON one click away
+    const row = (e) => {
+      const t = esc((e.t || '').slice(11, 19));
+      if (e.event) return `<div class="lr"><span class="lt">${t}</span><span class="le">${esc(e.event.replace(/_/g, ' '))}</span><span>${esc(e.error || (e.gate && e.gate.model) || e.gate || '')}</span></div>`;
+      const d = e.decision;
+      const dec = d ? `${d.gate}: ${esc(d.what || '?')} ${Math.round((d.p_blocked || 0) * 100)}%` : esc(e.obs && e.obs.trigger || '');
+      const acts = (e.actions || []).map((a) => `<span class="la ${a.radio && a.radio.source === 'lfm3' ? '' : 'tpl'}">${esc(a.action)}</span>`).join(' ') || '<span class="lm">no action</span>';
+      const rw = e.runway === 'closed' ? '<span class="lc">CLOSED</span>' : '<span class="lo">clear</span>';
+      return `<div class="lr"><span class="lt">${t}</span><span class="ld">${dec}</span>${rw}<span class="lacts">${acts}</span><span class="lm">${(e.loop_ms / 1000).toFixed(1)} s</span></div>`;
+    };
+    const evs = s.events.slice().reverse();
+    $('#log').innerHTML = evs.map(row).join('');
+    $('#lograw').textContent = evs.map((e) => JSON.stringify(e)).join('\n');
   }
 
   async function poll() {

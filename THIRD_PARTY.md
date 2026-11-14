@@ -37,13 +37,13 @@ SOFTWARE.
 
 | File | Source | Author | License |
 |---|---|---|---|
-| `capy_baby.jpg` | Baby Capybara.jpg | Neil Turner | CC BY-SA 2.0 |
-| `capy_family.jpg` | 073 Capybara mother and baby in Encontro das Águas State Park | Giles Laurent | CC BY-SA 4.0 |
-| `capy_portrait.jpg` | Capybara portrait 2.jpg | Smabs Sputzer | CC BY 2.0 |
-| `dog.jpg` | Golden retriever running on a dirt road.jpg | Valentina Storti | CC BY 2.0 |
 | `deer.jpg` | White-tailed Deer - Odocoileus virginianus (51360828067).jpg | GlacierNPS | Public domain |
+| `coyote.jpg` | Urban coyote on residential street in Grant Park, Portland, Oregon.jpg | PortlandAppraisalBlog | CC BY-SA 4.0 |
 | `goose.jpg` | Canada Goose in Canada's Wonderland.jpg | K2HWY | CC BY 4.0 |
-| `car.jpg` | Red Smart Car Side View Driveway.jpg | TudorTulok | CC0 |
+| `dog.jpg` | Golden retriever running on a dirt road.jpg | Valentina Storti | CC BY 2.0 |
+| `person.jpg` | Hombre Solo - Calle de Pedro Bosch - Madrid.jpg | Javier Perez Montes | CC BY-SA 4.0 |
+| `tug.jpg` | Airport Baggage or Tow Tractor.jpg | Oleg Yunakov | CC BY-SA 4.0 |
+| `drone.jpg` | Quadcopter camera drone in flight.jpg | Josh Sorenson | CC0 |
 | `cone.jpg` | A toppled orange traffic cone at Huntington station.jpg | Ser Amantio di Nicolao | CC BY-SA 4.0 |
 
 `presets.json` holds d1-2B's answers for each preset, measured on the IQ-9075.

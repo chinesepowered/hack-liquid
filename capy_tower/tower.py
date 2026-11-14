@@ -242,6 +242,7 @@ def clean(text):
     text = (text or "").strip().splitlines()[0].strip() if (text or "").strip() else ""
     text = re.sub(r"\[?\s*request[:\s]+[0-9a-f]{8,}\s*\]?", "", text, flags=re.I)  # client uniqueness tag
     text = re.sub(r"\s+", " ", text).strip(" \"'`*").strip()
+    text = re.sub(r"\s*,\s*([.!?])", r"\1", text)  # "cleared to land,." -> "cleared to land."
     return text[:240]
 
 
