@@ -1,14 +1,18 @@
 """Capy's voice: speaks tower radio calls on the board's speaker. Fully offline.
 
 Backends (picked with --voice):
-  lfm3    LiquidAI LFM3-Audio-2B text-to-speech through llama.cpp's llama-tts, on the board CPU
-  espeak  espeak-ng, tiny and instant, sounds like a radio
+  lfm3    LiquidAI LFM3-Audio-2B. The tower phrasebook is pre-rendered on the board with llama.cpp's
+          llama-tts (scripts/render_voice.py), because live synthesis runs at about 0.45x real time on
+          the CPU. A call plays its LFM3-Audio clip instantly; if the exact wording is not in the
+          phrasebook, the verified template of the same instruction is used; anything else goes to Piper.
+  piper   Piper neural TTS (en_US-amy-medium, ONNX on the board CPU), about 1.3 s per call
+  espeak  espeak-ng, tiny and instant, robotic
   off     silent
 
-Speech runs on its own thread with a short queue, so it never blocks the decision loop. If the
-LFM3 voice fails or takes too long, that call falls back to espeak-ng and the failure is logged.
+Speech runs on its own thread with a short queue, so it never blocks the decision loop.
 """
 
+import json
 import os
 import queue
 import shutil
@@ -19,85 +23,95 @@ import time
 from pathlib import Path
 
 
+def spoken(text):
+    """Read callsigns and runways the way a controller says them."""
+    return " ".join(text.replace("two-eight", "two eight").replace("-", " ").split())
+
+
 class Voice(threading.Thread):
-    def __init__(self, mode="espeak", device="default", tts_bin="~/llama.cpp/build/bin/llama-tts",
-                 model_dir="~/models/lfm3-audio", tts_voice="female", timeout=25, log=None, radio_fx=False):
+    def __init__(self, mode="lfm3", device="default", log=None, timeout=25,
+                 phrasebook="~/models/capy-voice", piper_bin="~/.venvs/piper/bin/piper",
+                 piper_model="~/models/piper/en_US-amy-medium.onnx"):
         super().__init__(daemon=True)
         self.mode, self.device, self.timeout, self.log = mode, device, timeout, log or (lambda r: None)
-        self.tts_bin = os.path.expanduser(tts_bin)
-        md = Path(os.path.expanduser(model_dir))
-        self.model, self.mmproj = md / "LFM3-Audio-2B-Q4_K_M.gguf", md / "mmproj-LFM3-Audio-2B-Q8_0.gguf"
-        self.tts_voice = tts_voice
-        self.radio_fx = radio_fx and shutil.which("sox") is not None
+        self.book_dir = Path(os.path.expanduser(phrasebook))
+        self.piper_bin, self.piper_model = os.path.expanduser(piper_bin), os.path.expanduser(piper_model)
         self.q = queue.Queue(maxsize=6)
         self.tmp = Path(tempfile.mkdtemp(prefix="capy-voice-"))
-        self.speaking = None
-        if self.mode == "lfm3" and not (os.access(self.tts_bin, os.X_OK) and self.model.exists() and self.mmproj.exists()):
-            self.log({"event": "voice_fallback", "reason": "llama-tts or LFM3-Audio files missing", "voice": "espeak"})
+        self.speaking, self.last_voice = None, None
+        self.has_piper = os.access(self.piper_bin, os.X_OK) and os.path.exists(self.piper_model)
+        self.has_espeak = shutil.which("espeak-ng") is not None
+        if self.mode == "lfm3" and not (self.book_dir / "index.json").exists():
+            self.log({"event": "voice_fallback", "wanted": "lfm3", "reason": "no LFM3-Audio phrasebook yet"})
+        if self.mode == "piper" and not self.has_piper:
             self.mode = "espeak"
-        if self.mode == "espeak" and not shutil.which("espeak-ng"):
+        if self.mode == "espeak" and not self.has_espeak:
             self.mode = "off"
 
-    def info(self):
-        return {"mode": self.mode, "speaking": self.speaking,
-                "model": "LiquidAI/LFM3-Audio-2B (llama.cpp, CPU)" if self.mode == "lfm3" else
-                         "espeak-ng" if self.mode == "espeak" else None}
+    def _book(self):
+        try:  # re-read each time: the phrasebook may still be rendering in the background
+            return json.loads((self.book_dir / "index.json").read_text())
+        except (OSError, ValueError):
+            return {}
 
-    def say(self, text):
+    def info(self):
+        names = {"lfm3": "LiquidAI LFM3-Audio-2B (pre-rendered on the board)", "piper": "Piper en_US-amy-medium",
+                 "espeak": "espeak-ng"}
+        return {"mode": self.mode, "model": names.get(self.mode), "speaking": self.speaking,
+                "last_voice": self.last_voice, "phrasebook": len(self._book()) if self.mode == "lfm3" else None}
+
+    def say(self, text, alt=None):
+        """Speak `text`; `alt` is the verified template of the same instruction (phrasebook fallback)."""
         if self.mode == "off" or not text:
             return
         try:
-            self.q.put_nowait(text)
+            self.q.put_nowait((text, alt))
         except queue.Full:  # never let speech back up behind the tower
             self.log({"event": "voice_dropped", "text": text[:120]})
 
     # ---- synthesis ------------------------------------------------------------------------------
 
-    def _espeak(self, text, out):
-        subprocess.run(["espeak-ng", "-v", "en-us+f3", "-s", "150", "-a", "200", "-w", str(out), text],
-                       check=True, timeout=10, capture_output=True)
-
-    def _lfm3(self, text, out):
-        cmd = [self.tts_bin, "-m", str(self.model), "-mm", str(self.mmproj), "-p", text,
-               "--tts-voice", self.tts_voice, "-o", str(out)]
-        r = subprocess.run(cmd, timeout=self.timeout, capture_output=True, text=True)
-        if r.returncode or not out.exists() or out.stat().st_size < 2000:
+    def _piper(self, text, out):
+        r = subprocess.run([self.piper_bin, "-m", self.piper_model, "-f", str(out)], input=spoken(text),
+                           text=True, timeout=self.timeout, capture_output=True)
+        if r.returncode or not out.exists():
             raise RuntimeError((r.stderr or "no audio")[-300:])
 
-    def _fx(self, wav):
-        if not self.radio_fx:
-            return wav
-        out = wav.with_name(wav.stem + "_fx.wav")
-        # tower radio: band-limited, a touch of drive, short squelch tail
-        subprocess.run(["sox", str(wav), str(out), "highpass", "300", "lowpass", "3400", "gain", "-n", "-0.5", "pad", "0.05", "0.15"], timeout=10, capture_output=True)
-        return out if out.exists() else wav
+    def _espeak(self, text, out):
+        subprocess.run(["espeak-ng", "-v", "en-us+f3", "-s", "150", "-a", "200", "-g", "4", "-w", str(out),
+                        spoken(text)], check=True, timeout=10, capture_output=True)
 
     def _play(self, wav):
         subprocess.run(["aplay", "-q", "-D", self.device, str(wav)], timeout=30, capture_output=True)
 
+    def _render(self, text, alt, wav):
+        """Returns (wav path, voice used, spoken text)."""
+        if self.mode == "lfm3":
+            book = self._book()
+            for t in (text, alt):
+                if t and spoken(t) in book and (self.book_dir / book[spoken(t)]).exists():
+                    return self.book_dir / book[spoken(t)], "lfm3-audio", t
+        if self.mode in ("lfm3", "piper") and self.has_piper:
+            self._piper(text, wav)
+            return wav, "piper", text
+        self._espeak(text, wav)
+        return wav, "espeak", text
+
     def run(self):
         n = 0
         while True:
-            text = self.q.get()
+            text, alt = self.q.get()
             n += 1
             wav = self.tmp / f"call{n % 8}.wav"
             wav.unlink(missing_ok=True)
             t0 = time.perf_counter()
-            used, err = self.mode, None
             try:
                 self.speaking = text
-                if self.mode == "lfm3":
-                    try:
-                        self._lfm3(text, wav)
-                    except Exception as e:  # keep talking: this call goes out on espeak
-                        err, used = f"{type(e).__name__}: {e}"[:200], "espeak"
-                        self._espeak(text, wav)
-                else:
-                    self._espeak(text, wav)
-                synth_ms = round((time.perf_counter() - t0) * 1000)
-                self._play(self._fx(wav))
-                self.log({"event": "spoke", "voice": used, "synth_ms": synth_ms, "text": text[:160],
-                          **({"lfm3_error": err} if err else {})})
+                path, used, said = self._render(text, alt, wav)
+                ready_ms = round((time.perf_counter() - t0) * 1000)
+                self.last_voice = used
+                self._play(path)
+                self.log({"event": "spoke", "voice": used, "ready_ms": ready_ms, "text": said[:160]})
             except Exception as e:
                 self.log({"event": "voice_error", "error": f"{type(e).__name__}: {e}"[:200]})
             finally:

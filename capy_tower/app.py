@@ -259,7 +259,7 @@ class Agent(threading.Thread):
             radio = self.radio_call(act)
             who = {"PILOT_CALL": "TOWER", "OPS": "TOWER→OPS", "ALL": "TOWER→ALL"}[tw.station(act)]
             self._radio(who, radio["text"], radio | {"action": act["action"]})
-            self.voice.say(radio["text"])
+            self.voice.say(radio["text"], radio.get("template"))
             done.append({"action": act["action"], "target": act.get("target"), "auto": act.get("auto"),
                          "executed": True, "radio": radio})
         loop_ms = round((time.perf_counter() - t_loop) * 1000, 1)
@@ -435,8 +435,8 @@ def main():
     ap.add_argument("--llm", default=DEFAULT_MODEL)
     ap.add_argument("--compute", default="npu")
     ap.add_argument("--max-radio-tokens", type=int, default=48)
-    ap.add_argument("--voice", choices=["lfm3", "espeak", "off"], default="espeak",
-                    help="speak tower calls on the board speaker (lfm3 = LiquidAI LFM3-Audio via llama.cpp)")
+    ap.add_argument("--voice", choices=["lfm3", "piper", "espeak", "off"], default="lfm3",
+                    help="speak tower calls on the board speaker (piper neural TTS; lfm3 = LiquidAI LFM3-Audio via llama.cpp, slow)")
     ap.add_argument("--no-lfm", action="store_true", help="template radio calls only (UI testing)")
     ap.add_argument("--no-warmup", dest="warmup", action="store_false")
     ap.add_argument("--log", default=str(HERE.parent / "logs" / "capy_tower.jsonl"))
