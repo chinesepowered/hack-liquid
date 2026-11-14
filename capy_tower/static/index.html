@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capy Tower</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">CAPY TOWER</span>
+    <span class="sub">Runway 28 · always-on · zero network</span>
+  </div>
+  <div class="badges">
+    <span id="b-net" class="badge">network …</span>
+    <span id="b-lfm" class="badge">LFM3-1.7B …</span>
+    <span id="b-gate" class="badge">d1-2B …</span>
+  </div>
+</header>
+
+<main>
+  <section class="left">
+    <div class="viewwrap">
+      <canvas id="view" width="640" height="400"></canvas>
+      <div id="ribbon" class="ribbon wait">WAITING FOR THE RUNWAY CAMERA</div>
+      <div id="simbadge" class="simbadge">SIM</div>
+      <video id="video" playsinline muted></video>
+    </div>
+    <div class="controls">
+      <div class="seg">
+        <button id="m-sim" class="on">Simulated runway</button>
+        <button id="m-cam">Laptop camera</button>
+      </div>
+      <div id="simctl" class="row">
+        <button id="s-capy">🐾 Capybara wanders on</button>
+        <button id="s-cone">🚧 Drop a cone</button>
+        <button id="s-clear">🧹 Clear the runway</button>
+      </div>
+      <div id="rulectl" class="row hidden">
+        <button id="s-base">Set empty runway (rule gate)</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>What Capy saw <small id="d-meta"></small></h3>
+      <div class="saw">
+        <img id="d-img" alt="last frame the board decided on">
+        <div class="bars" id="bars"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="panel capypanel">
+      <svg id="capy" class="mood-chill" viewBox="0 0 200 190" aria-label="Capy the tower capybara">
+        <ellipse cx="52" cy="42" rx="15" ry="12" fill="#7a4e24"/>
+        <ellipse cx="148" cy="42" rx="15" ry="12" fill="#7a4e24"/>
+        <rect x="22" y="34" width="156" height="140" rx="64" fill="#a8703c"/>
+        <ellipse cx="100" cy="132" rx="56" ry="36" fill="#c69261"/>
+        <ellipse cx="84" cy="122" rx="7" ry="4.5" fill="#3d2410"/>
+        <ellipse cx="116" cy="122" rx="7" ry="4.5" fill="#3d2410"/>
+        <g class="eyes e-chill"><path d="M55 88 q11 -8 22 0" /><path d="M123 88 q11 -8 22 0" /></g>
+        <g class="eyes e-alert"><circle cx="66" cy="88" r="7"/><circle cx="134" cy="88" r="7"/></g>
+        <g class="eyes e-alarmed"><circle cx="66" cy="86" r="12" fill="#fff"/><circle cx="134" cy="86" r="12" fill="#fff"/><circle cx="66" cy="88" r="6"/><circle cx="134" cy="88" r="6"/></g>
+        <g class="eyes e-happy"><path d="M55 92 q11 -12 22 0" /><path d="M123 92 q11 -12 22 0" /></g>
+        <path class="mouth m-calm" d="M88 146 q12 8 24 0"/>
+        <ellipse class="mouth m-alarmed" cx="100" cy="150" rx="9" ry="8" fill="#3d2410"/>
+        <path d="M26 74 Q100 -14 174 74" stroke="#1d232b" stroke-width="9" fill="none" stroke-linecap="round"/>
+        <rect x="12" y="64" width="22" height="38" rx="9" fill="#2a313b"/>
+        <rect x="166" y="64" width="22" height="38" rx="9" fill="#2a313b"/>
+        <path d="M24 100 Q34 146 74 150" stroke="#2a313b" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <circle cx="76" cy="150" r="7" fill="#2a313b"/>
+        <g class="yuzu"><circle cx="100" cy="26" r="15" fill="#f4c20d"/><path d="M100 11 q6 -8 12 -6" stroke="#3f7d20" stroke-width="4" fill="none"/></g>
+      </svg>
+      <div class="bubble">
+        <div id="say" class="say">Capy is waking up…</div>
+        <div id="saymeta" class="saymeta"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Traffic</h3>
+      <div id="traffic" class="traffic"></div>
+      <div class="row">
+        <button id="r-takeoff">✈ Cessna 28A: ready for departure</button>
+        <button id="r-landing">🛬 Cirrus 7CP: on final</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Radio <small>LFM3-1.7B on the NPU writes every tower call; code picks the instruction</small></h3>
+      <div id="radio" class="radio"></div>
+    </div>
+
+    <div class="panel">
+      <h3>On-device numbers</h3>
+      <div id="metrics" class="metrics"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Decision log <small id="logpath">logs/capy_tower.jsonl</small></h3>
+      <pre id="log" class="log"></pre>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Every model runs on the Qualcomm Dragonwing IQ-9075: d1-2B decides, LFM3-1.7B talks. No cloud, no API keys.
+  · Team chinese · @chinesepowered
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

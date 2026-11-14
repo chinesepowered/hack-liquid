@@ -1,0 +1,80 @@
+:root {
+  --bg: #0a111c; --panel: #111b2b; --line: #1f2d44; --ink: #e7edf6; --mute: #8fa1ba;
+  --amber: #ffb300; --green: #2fd27a; --red: #ff4f4f; --blue: #4aa8ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.logo { font-weight: 800; letter-spacing: .12em; color: var(--amber); font-size: 20px; }
+.sub { color: var(--mute); margin-left: 10px; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.badge { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--mute); }
+.badge.ok { border-color: var(--green); color: var(--green); }
+.badge.warn { border-color: var(--amber); color: var(--amber); }
+.badge.bad { border-color: var(--red); color: var(--red); }
+main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; padding: 14px 16px; }
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.viewwrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+#view { display: block; width: 100%; height: auto; }
+#video { display: none; }
+.ribbon { position: absolute; left: 0; right: 0; top: 0; padding: 7px 12px; font-weight: 800; letter-spacing: .06em; font-size: 15px; }
+.ribbon.clear { background: rgba(23, 120, 64, .9); }
+.ribbon.closed { background: rgba(190, 30, 30, .92); animation: blink 1s steps(2) infinite; }
+.ribbon.wait { background: rgba(60, 70, 90, .85); }
+@keyframes blink { 50% { background: rgba(120, 10, 10, .92); } }
+.simbadge { position: absolute; right: 10px; bottom: 10px; background: rgba(0,0,0,.6); border: 1px solid var(--amber);
+  color: var(--amber); font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 12px; }
+.controls { margin: 10px 0 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.hidden { display: none !important; }
+button { background: #1a2840; color: var(--ink); border: 1px solid #2b3d5e; border-radius: 8px; padding: 8px 12px;
+  font: inherit; cursor: pointer; }
+button:hover { border-color: var(--blue); }
+.seg { display: inline-flex; border: 1px solid #2b3d5e; border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button.on { background: var(--blue); color: #001; font-weight: 700; }
+.saw { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: start; }
+.saw img { width: 180px; border-radius: 6px; border: 1px solid var(--line); background: #000; min-height: 100px; }
+.bar { margin-bottom: 6px; }
+.bar .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); }
+.bar .trk { position: relative; height: 10px; background: #0b1424; border-radius: 5px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--blue); }
+.bar.main .fill { background: var(--red); }
+.bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--amber); }
+.capypanel { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; }
+#capy { width: 130px; height: auto; }
+#capy .eyes { display: none; fill: #2a1a0b; stroke: #2a1a0b; stroke-width: 5; stroke-linecap: round; }
+#capy .eyes path { fill: none; }
+#capy .mouth { display: none; stroke: #3d2410; stroke-width: 4; fill: none; stroke-linecap: round; }
+#capy .m-alarmed { fill: #3d2410; stroke: none; }
+#capy.mood-chill .e-chill, #capy.mood-alert .e-alert, #capy.mood-alarmed .e-alarmed, #capy.mood-happy .e-happy { display: inline; }
+#capy.mood-chill .m-calm, #capy.mood-alert .m-calm, #capy.mood-happy .m-calm, #capy.mood-alarmed .m-alarmed { display: inline; }
+#capy .yuzu { display: none; }
+#capy.mood-chill .yuzu, #capy.mood-happy .yuzu { display: inline; }
+#capy.mood-alarmed { animation: shake .4s linear infinite; }
+@keyframes shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+.bubble { background: #0b1424; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.say { font: 600 16px/1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--amber); }
+.saymeta { color: var(--mute); font-size: 12px; margin-top: 4px; }
+.traffic { display: grid; gap: 6px; }
+.ac { display: flex; justify-content: space-between; align-items: center; background: #0b1424; border-radius: 8px; padding: 6px 10px; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--mute); }
+.pill.go { border-color: var(--green); color: var(--green); }
+.pill.stop { border-color: var(--red); color: var(--red); }
+.pill.wait { border-color: var(--amber); color: var(--amber); }
+.radio { max-height: 230px; overflow: auto; display: grid; gap: 5px; }
+.msg { font: 13px/1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace; padding: 5px 8px; border-radius: 6px; background: #0b1424; }
+.msg .who { color: var(--blue); font-weight: 700; margin-right: 6px; }
+.msg.tower .who { color: var(--amber); }
+.msg .meta { color: var(--mute); font-size: 11px; margin-left: 6px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tile { background: #0b1424; border-radius: 8px; padding: 7px 9px; }
+.tile .k { color: var(--mute); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.tile .v { font-size: 18px; font-weight: 700; }
+.tile .v small { font-size: 12px; font-weight: 400; color: var(--mute); }
+.log { margin: 0; max-height: 170px; overflow: auto; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; color: #b8c6da; white-space: pre-wrap; word-break: break-all; }
+footer { color: var(--mute); padding: 8px 16px 18px; font-size: 12px; }
