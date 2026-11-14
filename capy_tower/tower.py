@@ -253,6 +253,8 @@ def valid(text, act):
         return False
     if any(w in low for w in FORBIDDEN.get(act["action"], [])):
         return False
+    if any(n != RUNWAY for n in re.findall(r"runway\s+(\d+)", low)):  # wrong runway number
+        return False
     if act["action"] in PILOT_ACTIONS and act.get("spoken"):
         return act["spoken"].lower() in low  # exact callsign, e.g. "cirrus seven-charlie-papa"
     return True

@@ -1,0 +1,9 @@
+[Unit]
+Description=Capy Tower USB-C link (NCM gadget)
+After=local-fs.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/ubuntu/hack-liquid/scripts/usb_link.sh a600000.usb
+[Install]
+WantedBy=multi-user.target

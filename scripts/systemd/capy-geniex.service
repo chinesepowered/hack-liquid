@@ -1,0 +1,11 @@
+[Unit]
+Description=GenieX LFM3 server (NPU)
+After=network.target
+[Service]
+User=ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/ubuntu
+ExecStart=/bin/bash /home/ubuntu/cleared-for-takeoff-hackathon/skills/iq9-geniex-lfm/scripts/serve.sh run
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

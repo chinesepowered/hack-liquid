@@ -1,0 +1,13 @@
+[Unit]
+Description=Capy Tower app
+After=capy-geniex.service capy-usb.service
+Wants=capy-geniex.service
+[Service]
+User=ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/ubuntu/hack-liquid
+ExecStartPre=/bin/sleep 20
+ExecStart=/home/ubuntu/hack-liquid/scripts/run_board.sh
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
