@@ -247,7 +247,7 @@ def clean(text):
 
 def valid(text, act):
     low = text.lower()
-    if len(text) < 8 or len(text.split()) > 28 or re.search(r"[0-9a-f]{12,}", low):
+    if len(text) < 8 or len(text.split()) > 28 or re.search(r"[0-9a-f]{12,}|(\d[-\s]?){5,}", low):
         return False
     if not all(w in low for w in REQUIRED[act["action"]]):
         return False
