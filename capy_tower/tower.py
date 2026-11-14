@@ -5,6 +5,7 @@ runway decision. LFM3-1.7B only phrases the radio call, and its text is checked 
 mandatory instruction before it is used; otherwise the template below is sent instead.
 """
 
+import re
 import time
 
 RUNWAY = "28"
@@ -213,33 +214,45 @@ def template(act):
 def prompt(act):
     n, cs = act["action"], act.get("spoken")
     why = _reason_text(act)
-    conf = f" (runway camera confidence {round(act['p_blocked'] * 100)}%)" if act.get("p_blocked") is not None else ""
     task = {
         "clear_for_takeoff": f"Call {cs}. The runway is clear. Clear them for takeoff on runway {RWY}.",
-        "hold_short": f"Call {cs}, who is ready for departure. Tell them to hold short of runway {RWY} because of {why}{conf}.",
-        "cancel_takeoff": f"Call {cs}, who was cleared for takeoff. Cancel the takeoff clearance and tell them to hold position because of {why}{conf}.",
+        "hold_short": f"Call {cs}, who is ready for departure. Tell them to hold short of runway {RWY} because of {why}.",
+        "cancel_takeoff": f"Call {cs}, who was cleared for takeoff. Cancel the takeoff clearance and tell them to hold position because of {why}.",
         "clear_to_land": f"Call {cs} on final. The runway is clear. Clear them to land on runway {RWY}.",
-        "go_around": f"Call {cs} on final. Tell them to go around because of {why}{conf}.",
-        "close_runway": f"Call all traffic. Runway {RWY} is closed because of {why}{conf}.",
+        "go_around": f"Call {cs} on final. Tell them to go around because of {why}.",
+        "close_runway": f"Call all traffic. Runway {RWY} is closed because of {why}.",
         "reopen_runway": f"Call all traffic. Runway {RWY} is clear again and open.",
         "dispatch_wildlife_crew": f"Call airport ops. There is {why} on runway {RWY}. Ask them to send the wildlife crew.",
         "dispatch_sweeper": f"Call airport ops. There is debris on runway {RWY}. Ask them to send the sweeper.",
         "alert_security": f"Call airport ops. There is {why} on runway {RWY}. Ask them to send security.",
     }[n]
-    return task + " Identify yourself as Capy Tower when calling all traffic or airport ops."
+    return (f"{task} Say the callsign exactly as written. One short transmission, one sentence. "
+            f"Example of the style: \"{template(act)}\"")
+
+
+# Words a call must never contain for each instruction: a stop must not sound like a clearance.
+FORBIDDEN = {
+    "go_around": ["cleared"], "hold_short": ["cleared"], "cancel_takeoff": ["cleared for", "cleared to"],
+    "close_runway": ["cleared", "open"], "clear_for_takeoff": ["go around", "hold", "closed"],
+    "clear_to_land": ["go around", "hold", "closed"], "reopen_runway": ["closed"],
+}
 
 
 def clean(text):
     text = (text or "").strip().splitlines()[0].strip() if (text or "").strip() else ""
-    return text.strip(" \"'`*").strip()[:240]
+    text = re.sub(r"\[?\s*request[:\s]+[0-9a-f]{8,}\s*\]?", "", text, flags=re.I)  # client uniqueness tag
+    text = re.sub(r"\s+", " ", text).strip(" \"'`*").strip()
+    return text[:240]
 
 
 def valid(text, act):
     low = text.lower()
-    if len(text) < 8:
+    if len(text) < 8 or len(text.split()) > 28 or re.search(r"[0-9a-f]{12,}", low):
         return False
     if not all(w in low for w in REQUIRED[act["action"]]):
         return False
-    if act["action"] in PILOT_ACTIONS and act.get("target"):
-        return act["target"].split()[0].lower() in low  # "cessna" / "cirrus"
+    if any(w in low for w in FORBIDDEN.get(act["action"], [])):
+        return False
+    if act["action"] in PILOT_ACTIONS and act.get("spoken"):
+        return act["spoken"].lower() in low  # exact callsign, e.g. "cirrus seven-charlie-papa"
     return True
