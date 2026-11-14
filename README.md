@@ -1,111 +1,162 @@
 # Capy Tower 🐾✈️
 
-**An always-on control tower for runways nobody is watching.** Capy Tower watches a runway camera, spots a capybara (or anything else) on the runway, orders the go-around, closes the runway, dispatches the wildlife crew, and talks to pilots in FAA phraseology. It runs entirely on a **Qualcomm Dragonwing IQ-9075** with **LiquidAI LFM3-family models**: no cloud, no API keys, no network.
+**An offline AI control tower in a box, running entirely on a Qualcomm Dragonwing IQ-9075.**
 
-> On November 13, 2026, a communications failure at the FAA grounded every departure in the United States. That same evening we built a tower that does not need the network at all.
+Capy Tower watches a runway camera and, the moment a capybara (or a person, vehicle, or piece of debris) wanders onto the runway, it orders the landing aircraft to go around, closes the runway, and calls the wildlife crew. It talks to pilots in standard FAA phraseology, and once the runway is clear again it reopens it and clears waiting traffic on its own. LiquidAI's **d1-2B** decides what is on the runway and **LFM3-1.7B** on the **Hexagon NPU** writes every radio call. Nothing leaves the board: turn the Wi-Fi off and the tower keeps working.
 
-Built at the *On-Device AI Hackathon: Cleared for Takeoff* (LiquidAI x Qualcomm), San Francisco, by **Team chinese** ([@chinesepowered](https://x.com/chinesepowered) on X).
+![Capy Tower closing runway 28 for a capybara, with the board offline](docs/img/board_closed.png)
 
-## What it does
+*Live on the IQ-9075 with Wi-Fi off: d1-2B is 99% sure there is a capybara on the runway, the Cirrus is sent around, and the runway is closed.*
 
-- **Watches** the runway camera: a laptop camera, or a simulated runway, streams frames to the board.
-- **Decides** with **d1-2B**, LiquidAI's decision model built on LFM3-VL-2B. One forward pass answers two typed questions per frame: *is anything on the runway?* (a calibrated probability) and *what is it?* (capybara, other wildlife, person, vehicle, debris, nothing). A cheap pixel-change gate skips frames where nothing moved.
-- **Acts** through an allowlist of ten tower actions. When the runway becomes blocked it orders a **go-around** for traffic cleared to land, cancels a takeoff roll, **closes the runway**, and dispatches the **wildlife crew**, sweeper, or security.
-- **Talks**: **LFM3-1.7B on the Hexagon NPU** writes every radio call. Code chooses the instruction; the generated call must contain it, must use the exact callsign, and must not contain words that contradict it (a go-around may never say "cleared"), or a fixed template is sent instead.
-- **Acts on its own**: aircraft told to hold or go around are cleared automatically once the runway is clear again, arrivals first.
-- **Logs** every decision, action and radio call to `logs/capy_tower.jsonl`, and shows them live on the tower screen together with on-device timings.
+Team **chinese** · [@chinesepowered](https://x.com/chinesepowered) on X · *On-Device AI Hackathon: Cleared for Takeoff*, LiquidAI x Qualcomm, San Francisco, November 13, 2026
 
-## Why not a cloud API call?
+## The problem
 
-1. **The network is the failure mode.** The FAA's nationwide ground stop on November 13, 2026 started with a communications failure. A safety system that needs a network goes down with it. Capy Tower makes no off-board calls: the judge turns the board's Wi-Fi off and it keeps working.
-2. **Seconds matter.** A go-around has to be called as soon as something wanders onto the runway, with no round trip, rate limit or outage in the path.
-3. **Most US airports have no control tower**, and many have poor connectivity. Streaming runway video to a cloud model around the clock costs bandwidth and per-call fees; here the marginal cost is zero, and the change gate keeps the model idle while nothing moves.
-4. **Privacy.** Camera frames never leave the board.
+On the afternoon of November 13, 2026, the day of this hackathon, a communications failure at the FAA grounded every departure in the United States. Air traffic safety depends on networks, and networks fail.
 
-## How it works
+Meanwhile, most of the roughly 5,000 public airports in the US have **no control tower at all**. Nobody watches the runway when a deer, a dog, a loose cone, or a capybara wanders onto it, and pilots find out on short final. A cloud-vision fix does not work here: these airfields often have poor connectivity, streaming runway video all day costs money per call, and a safety system that depends on the network goes down exactly when the network does.
 
-```
- laptop browser                                   Qualcomm Dragonwing IQ-9075 (everything below runs here)
- --------------                                   ---------------------------------------------------------
- laptop camera  ┐                                 observe   latest frame
- or SIM runway  ┴─ JPEG over the isolated  ──▶    gate      pixel change? (unchanged frames are skipped)
-                   USB-C link (USB NCM)           decide    d1-2B · CPU · Transformers system_one()
-                                                            p(something on the runway), what is it
- tower screen  ◀── /api/state (poll) ─────────    policy    close at p >= 0.6, reopen at p <= 0.4, fail safe
-                                                  act       allowlisted: go_around, close_runway, hold_short, ...
-                                                  talk      LFM3-1.7B Q4_0 · Hexagon NPU · GenieX -> radio call,
-                                                            checked for the mandatory instruction
-                                                  log       logs/capy_tower.jsonl (flushed every iteration)
-```
+## Our solution
 
-| Job | Model | Runtime | Compute |
+An **always-on local agent** that needs nothing but power:
+
+1. **Watch.** A camera (or a simulated runway for the demo) streams frames to the board. A pixel-change gate skips frames where nothing moved, so the models stay idle on a quiet runway.
+2. **Decide.** **d1-2B** answers typed questions about each changed frame in one forward pass: *is anything on the runway?* and *what is it?*
+3. **Act.** Plain code turns that decision into tower actions from an allowlist: go around, cancel takeoff, close the runway, hold short, dispatch the wildlife crew, reopen, clear to land, clear for takeoff.
+4. **Talk.** **LFM3-1.7B** on the NPU phrases each instruction as a radio call. A safety check makes sure the call says what the code decided, or a fixed template is sent instead.
+5. **Recover on its own.** When the runway clears, aircraft that were told to wait are cleared automatically, arrivals first.
+6. **Log.** Every decision, action and radio call goes to `logs/capy_tower.jsonl` and the live tower screen.
+
+**Why not a cloud API call?** Because the network is the failure mode. A go-around cannot wait for a round trip, an outage or a rate limit; the marginal cost of watching all day is zero; and runway video never leaves the airfield.
+
+## Sponsor technology at a glance
+
+| Sponsor | What we used | What it does in Capy Tower | Where it runs |
 |---|---|---|---|
-| Runway decision | `LiquidAI/d1-2B`, pinned revision `10e7671d44e4` | Transformers 5.19.0 `system_one()`, fp32 | IQ-9075 CPU (8 cores) |
-| Radio calls | `LiquidAI/LFM3-1.7B-GGUF:Q4_0` (QAD) | GenieX v0.10.0 (QAIRT 2.50), OpenAI-compatible server on `127.0.0.1:18181` | Hexagon NPU (`HTP0`) |
+| **Qualcomm** | Dragonwing **IQ-9075** EVK (QCS9075, 36 GB LPDDR5, Ubuntu 24.04) | Hosts the entire system: both models, the agent loop, the web app and the log | The board |
+| **Qualcomm** | **Hexagon NPU** (HTP v73) via **GenieX v0.10.0** (QAIRT 2.50) | Runs LFM3-1.7B for every radio call, about 0.6 s per call | NPU (`HTP0`) |
+| **Qualcomm** | Kryo **CPU** (8 cores) | Runs d1-2B decisions through Transformers | CPU |
+| **Qualcomm** | Board **USB-C port** as a USB network gadget | Isolated laptop link for the screen, so the demo works with Wi-Fi off | Board USB-C |
+| **LiquidAI** | **LFM3-1.7B** (GGUF, QAD Q4_0) | The tower's voice: FAA-style radio calls | NPU |
+| **LiquidAI** | **d1-2B** (LFM3 family decision model, built on LFM3-VL-2B) | The tower's eyes: is the runway blocked, and by what | CPU |
 
-d1 and the LFM run one after the other in a single loop, as the hackathon's reference stack requires. The browser is only a sensor and a display: it never runs a model and never talks to anything but the board.
+## Architecture
 
-## On-device numbers
+```mermaid
+flowchart LR
+    subgraph Laptop["Laptop (sensor and display only, no inference)"]
+        CAM["Laptop camera<br/>or simulated runway"]
+        UI["Tower screen<br/>(browser)"]
+    end
 
-Measured on the IQ-9075 during our rehearsal (simulated runway, full demo script). Live values are on the tower screen and in `logs/capy_tower.jsonl`.
+    subgraph Board["Qualcomm Dragonwing IQ-9075 (everything runs here, offline)"]
+        direction TB
+        WEB["Capy Tower app server<br/>127.0.0.1:8000"]
+        GATE["Change gate<br/>skip unchanged frames"]
+        D1["LiquidAI d1-2B<br/>CPU · Transformers<br/>p(blocked), what is it"]
+        POL["Tower policy (code)<br/>hysteresis, fail safe,<br/>allowlisted actions"]
+        LFM["LiquidAI LFM3-1.7B Q4_0<br/>Hexagon NPU · GenieX<br/>radio call"]
+        CHK["Safety check<br/>instruction + callsign,<br/>else template"]
+        LOG[("JSONL decision log")]
+        WEB --> GATE --> D1 --> POL --> LFM --> CHK
+        POL --> LOG
+        CHK --> LOG
+        CHK --> WEB
+    end
+
+    CAM -- "JPEG frames over USB-C link<br/>(USB NCM, no internet)" --> WEB
+    WEB -- "state, radio, numbers" --> UI
+```
+
+The browser never runs a model and talks only to the board, over an SSH tunnel on a direct USB-C cable. The app, both model servers and the log all bind to the board's loopback interface.
+
+## Qualcomm: Dragonwing IQ-9075
+
+**The board is the whole product.** We started from a freshly flashed IQ-9075 and set it up during the event (`scripts/board_setup.sh`):
+
+- **Hexagon NPU through GenieX.** We installed the NPU packages (`qcom-fastrpc1`, `libqnn1`), gave the user access to `/dev/fastrpc-cdsp*`, installed **GenieX v0.10.0**, and serve LFM3-1.7B from its OpenAI-compatible server on `127.0.0.1:18181` with NPU compute. The server log confirms `Using 1 device(s): HTP0`. Every radio call is a capped, validated request to that local server: about **0.61 s end to end, 18 tokens**.
+- **CPU for the decision model.** d1-2B runs in fp32 through Transformers on the 8-core Kryo CPU, the hackathon's verified d1 route. The NPU and CPU split the work: the NPU talks while the CPU looks.
+- **36 GB of memory** holds both models with room to spare: the whole app uses about **12 GB**.
+- **USB-C as the demo link.** The venue Wi-Fi isolated clients, and the laptop has no Ethernet port. We turned the board's USB-C port into a USB NCM network gadget (`scripts/usb_link.sh`): Windows 11 binds its inbox driver, both ends take link-local addresses, and the laptop reaches the board at `169.254.7.2` with no internet path at all. This is the isolated USB-C control link the judging rules allow.
+- **Survives a reboot.** systemd units (`scripts/systemd/`) bring back the USB link, the GenieX server and Capy Tower at boot.
+- **Offline proof.** The app reads `/proc/net/route` and shows **NO UPLINK · offline** when the board has no route out. We rehearsed the full demo with `nmcli radio wifi off`: every call still came from the NPU.
+
+## LiquidAI: LFM3 family
+
+**d1-2B, the eyes.** d1-2B is LiquidAI's decision model built on LFM3-VL-2B. Instead of generating text, it returns calibrated answers to typed questions in one forward pass with **zero output tokens**. Each changed frame gets two questions (`capy_tower/gates.py`):
+
+- `blocked` (yes/no): *Is there an animal, a person, a vehicle or an object on the runway right now?*
+- `what` (choice): capybara, other wildlife, person, vehicle, debris, or nothing.
+
+On the board, the capybara frame scores **p(blocked) 0.99** and **capybara 0.99**; the empty runway scores **p(blocked) 0.05**. The tower closes the runway at p ≥ 0.6 and reopens at p ≤ 0.4, so it does not flap, and an uncertain first reading fails safe. Because d1 answers with probabilities rather than prose, the safety decision is a number that code can threshold, log and audit.
+
+**LFM3-1.7B, the voice.** LFM3-1.7B (QAD Q4_0 GGUF, about 1 GB) writes each radio call in FAA phraseology from a short instruction prompt (`capy_tower/tower.py`). It never decides anything. Every call must:
+
+- contain the required instruction ("go around", "hold short", "cleared to land"…),
+- use the exact callsign ("Cirrus seven-charlie-papa"),
+- name only runway 28,
+- avoid contradicting words (a go-around may never say "cleared"),
+- stay short, with no stray digit runs or request tags.
+
+Otherwise the fixed template call is sent and the failure is logged. In our offline rehearsal, **11 of 11** generated calls passed. Reasoning is turned off for direct answers, and every request is capped and retried once, using the hackathon's `lfm_client.py`.
+
+**Why two LFM3 models?** Each does the job it is built for: a single-pass decision model for the safety-critical judgement, and a small generator for natural language. The decision costs zero generated tokens, and the generator only runs when there is something to say.
+
+## Measured on the IQ-9075
 
 | Metric | Value |
 |---|---|
-| d1-2B decision, CPU, fp32 (one 640x400 frame, two questions, 352 input tokens, 0 output tokens) | 7.6 s median |
-| d1-2B capybara detection | p(blocked) 0.99, "capybara" 0.99; empty runway p(blocked) 0.05 |
+| d1-2B decision, CPU fp32 (one frame, two questions, 352 input tokens) | 7.6 s median |
 | d1-2B model load | 3.9 s |
-| LFM3-1.7B radio call, NPU, end to end | 0.61 s median, 18 tokens median |
-| Generated calls that passed the safety check | 7 of 7 (0 template fallbacks) |
+| LFM3-1.7B radio call, NPU, end to end | 0.61 s median, 18 tokens |
+| Generated calls passing the safety check (offline run) | 11 of 11 |
 | App memory (RSS, includes d1 in fp32) | 11.9 GB of 36 GB |
-| Off-board network calls | none |
+| Off-board network calls | none (rehearsed with Wi-Fi off and no route) |
 
-The 7.6 s decision is the slow part: d1 runs in fp32 on the CPU, which is the hackathon's verified d1 route. The change gate means it only runs when the picture changes. Next step: d1 on the NPU through ZETIC's native `d1-2B-IQ9` package.
+The 7.6 s decision is the slow part, and the change gate means it only runs when the picture changes. **Next step:** move d1 to the NPU with ZETIC's native `d1-2B-IQ9` package.
 
-## Run it on the board
+## The two-minute demo
 
-The board starts as a fresh Ubuntu 24.04 image. While it has internet:
+1. Turn the board's Wi-Fi off in front of the judge: `sudo nmcli radio wifi off`. The header shows **NO UPLINK · offline**.
+2. **Cirrus 7CP: on final**: *"Cirrus seven-charlie-papa, runway two-eight, cleared to land."*
+3. **Capybara wanders on**: d1 flags it, then *"Cirrus seven-charlie-papa, go around, capybara on the runway."* The runway closes and the wildlife crew is called.
+4. **Cessna 28A: ready for departure**: *"Cessna two-eight-alpha, hold short runway two-eight, a capybara on the runway."*
+5. **Clear the runway**: the runway reopens and the Cirrus is cleared to land, with no further clicks.
+6. Point at the decision log and the on-device numbers.
+
+![Runway reopened and traffic cleared automatically](docs/img/board_reopen.png)
+
+## Run it
+
+On a fresh IQ-9075, while it has internet:
 
 ```bash
-SUDO_PW=... scripts/board_setup.sh geniex   # NPU packages, fastrpc group, GenieX v0.10.0, LFM3-1.7B Q4_0
-scripts/board_setup.sh d1                   # uv, d1 venv with CPU-only torch, pinned d1-2B snapshot
+SUDO_PW=... scripts/board_setup.sh geniex   # NPU packages, GenieX v0.10.0, LFM3-1.7B Q4_0
+scripts/board_setup.sh d1                   # d1 venv (CPU-only torch), pinned d1-2B snapshot
 ~/.local/bin/uv pip install --python ~/.venvs/d1/bin/python "transformers==5.19.0"
 ```
 
-Pin Transformers to 5.19.0: newer releases break d1-2B's bundled model code (`can_use_lfm3_conv`). Install CPU-only torch: the default aarch64 wheels pull gigabytes of CUDA libraries.
-
-Then, with GenieX serving (`skills/iq9-geniex-lfm/scripts/serve.sh run` from the [hackathon repo](https://github.com/heath0xFF/cleared-for-takeoff-hackathon)):
+With GenieX serving (`skills/iq9-geniex-lfm/scripts/serve.sh run` from the [hackathon repo](https://github.com/heath0xFF/cleared-for-takeoff-hackathon)):
 
 ```bash
-sudo scripts/usb_link.sh a600000.usb   # USB-C network link to the laptop, board at 169.254.7.2
+sudo scripts/usb_link.sh a600000.usb   # USB-C link to the laptop, board at 169.254.7.2
 scripts/run_board.sh                   # Capy Tower on 127.0.0.1:8000
 ```
 
-On the laptop, with a USB-C cable to the board's USB-C port (Windows 11 binds its inbox NCM driver and takes a 169.254.x.x address on its own):
+On the laptop, with a USB-C cable to the board's USB-C port:
 
 ```bash
 ssh -N -L 127.0.0.1:8000:127.0.0.1:8000 ubuntu@169.254.7.2
 ```
 
-Open `http://127.0.0.1:8000` and pick **Simulated runway** or **Laptop camera** (browsers allow the camera on `127.0.0.1`).
+Open `http://127.0.0.1:8000` and pick **Simulated runway** or **Laptop camera**.
 
-- No d1 yet? `scripts/run_board.sh --gate rule` uses a pixel rule against an empty-runway baseline.
-- Screen test anywhere, no models: `python3 capy_tower/app.py --gate rule --no-lfm` (needs Pillow).
-
-## The two-minute demo
-
-1. Board console: `sudo nmcli radio wifi off`, then `nmcli -p device`. The header turns to **NO UPLINK · offline**.
-2. **Cirrus 7CP: on final**: *"Cirrus seven-charlie-papa, runway two-eight, cleared to land."*
-3. **Capybara wanders on**: d1 flags it, then *"Cirrus seven-charlie-papa, go around, capybara on the runway."* The runway closes and the wildlife crew is called.
-4. **Cessna 28A: ready for departure**: *"Cessna two-eight-alpha, hold short runway two-eight, a capybara on the runway."*
-5. **Clear the runway**: the runway reopens, then the Cirrus is cleared to land with no further input.
-6. Point at the decision log and the on-device numbers.
-
-With the laptop camera, a capybara photo on a phone (`capy_tower/static/img/capybara.jpg`) held over a paper runway plays the capybara.
+Lessons from a fresh board: set the clock before HTTPS works; install CPU-only torch (the default aarch64 wheels pull gigabytes of CUDA libraries); pin Transformers 5.19.0 for d1-2B's bundled model code; and use the USB-C gadget link when the venue Wi-Fi isolates clients.
 
 ## Safety design
 
-- **Fail safe.** An uncertain first reading closes the runway; hysteresis (close at 0.6, reopen at 0.4) stops flapping.
-- **The language model never decides.** Code picks every instruction from the d1 decision; LFM3 only phrases it, and its text must carry the instruction and exact callsign, and no contradicting words, or the template is sent.
+- **The language model never decides.** Code picks every instruction from the d1 decision; LFM3 only phrases it, and a checker enforces the content.
+- **Fail safe.** Uncertain readings close the runway; hysteresis prevents flapping.
 - **Allowlist.** Only ten named actions can execute; anything else is logged as refused.
 - **Errors are data.** Failed decisions or radio calls are logged and the loop keeps watching.
 
@@ -121,6 +172,8 @@ With the laptop camera, a capybara photo on a phone (`capy_tower/static/img/capy
 | `scripts/board_setup.sh` | Fresh-board setup: NPU packages, GenieX, LFM3, d1 |
 | `scripts/usb_link.sh` | Isolated USB-C network link (USB NCM gadget) |
 | `scripts/run_board.sh` | Launcher with board checks |
-| `logs/capy_tower.jsonl` | Decision log |
+| `scripts/systemd/` | Boot units for the USB link, GenieX and Capy Tower |
+| `logs/capy_tower.jsonl` | Decision log from our rehearsal |
+| `docs/arduino_project_hub.md` | Our Arduino Project Hub write-up |
 
 Code: MIT (see `LICENSE`). Third-party material and model licenses: see `THIRD_PARTY.md`.
