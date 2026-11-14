@@ -96,6 +96,7 @@ class Shared:
         self.radio = deque(maxlen=40)
         self.events = deque(maxlen=40)
         self.decision = None
+        self.owner = None             # the screen whose frames are used; latest to load or click wins
         self.busy = None             # "d1" while deciding, "lfm" while writing a radio call
         self.n_decisions = self.n_skipped = self.n_radio = self.n_fallback = self.iteration = 0
         self.gate_ms, self.lfm_ms, self.lfm_tokens, self.loop_ms = (deque(maxlen=50) for _ in range(4))
@@ -395,11 +396,25 @@ def make_handler(s, t):
             if u.path == "/api/frame":
                 if not body.startswith(b"\xff\xd8"):
                     return self._send(400, {"error": "expected a JPEG"})
-                source = parse_qs(u.query).get("source", ["camera"])[0][:16]
+                q = parse_qs(u.query)
+                source = q.get("source", ["camera"])[0][:16]
+                client = q.get("client", [""])[0][:40]
                 with s.lock:
+                    if s.owner is None:
+                        s.owner = client
+                    if client != s.owner:  # another screen owns the runway camera
+                        return self._send(200, {"ok": True, "ignored": True})
                     s.frame = (body, time.time(), source)
                     s.frames_in += 1
                 return self._send(200, {"ok": True})
+            if u.path == "/api/claim":
+                try:
+                    client = str(json.loads(body or b"{}").get("client", ""))[:40]
+                except ValueError:
+                    client = ""
+                with s.lock:
+                    s.owner = client or None
+                return self._send(200, {"ok": True, "owner": True})
             if u.path == "/api/request":
                 try:
                     kind = json.loads(body or b"{}").get("kind")

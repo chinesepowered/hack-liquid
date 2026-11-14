@@ -10,7 +10,12 @@
   const video = $('#video');
   const capyImg = new Image(); capyImg.src = '/static/img/capybara.png';
 
-  let mode = 'sim', camOn = false, sending = false, lastDecisionT = null;
+  let mode = 'sim', camOn = false, sending = false, lastDecisionT = null, owner = true;
+  // Only one screen feeds the runway camera: the latest to load or click takes over.
+  const CLIENT = Math.random().toString(36).slice(2, 12);
+  const claim = () => { owner = true; fetch('/api/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client: CLIENT }) }).catch(() => {}); };
+  document.addEventListener('click', claim, true);
+  claim();
   let lastRadioT = null, d1Since = null, lastCounts = { decisions: 0, skipped: 0 };
   const sim = { capy: null, cone: null, photo: null };
   const phases = { departure: { phase: null, start: 0 }, arrival: { phase: null, start: 0 } };
@@ -152,8 +157,10 @@
     sending = true;
     scene.toBlob(async (blob) => {
       try {
-        await fetch('/api/frame?source=' + mode, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
-        pulse('#p-cam', 'flash', 350);
+        const r = await (await fetch('/api/frame?source=' + mode + '&client=' + CLIENT, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob })).json();
+        owner = !r.ignored;
+        $('#p-cam small').textContent = owner ? (mode === 'sim' ? 'simulated runway' : 'laptop camera') : 'another screen has the camera, click here';
+        if (owner) pulse('#p-cam', 'flash', 350);
       } catch (e) { /* board unreachable; the poll shows it */ }
       sending = false;
     }, 'image/jpeg', 0.82);
