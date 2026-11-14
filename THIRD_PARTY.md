@@ -32,3 +32,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Preset runway photos (`capy_tower/static/img/presets/`, resized), all from Wikimedia Commons
+
+| File | Source | Author | License |
+|---|---|---|---|
+| `capy_baby.jpg` | Baby Capybara.jpg | Neil Turner | CC BY-SA 2.0 |
+| `capy_family.jpg` | 073 Capybara mother and baby in Encontro das Águas State Park | Giles Laurent | CC BY-SA 4.0 |
+| `capy_portrait.jpg` | Capybara portrait 2.jpg | Smabs Sputzer | CC BY 2.0 |
+| `dog.jpg` | Golden retriever running on a dirt road.jpg | Valentina Storti | CC BY 2.0 |
+| `deer.jpg` | White-tailed Deer - Odocoileus virginianus (51360828067).jpg | GlacierNPS | Public domain |
+| `goose.jpg` | Canada Goose in Canada's Wonderland.jpg | K2HWY | CC BY 4.0 |
+| `car.jpg` | Red Smart Car Side View Driveway.jpg | TudorTulok | CC0 |
+| `cone.jpg` | A toppled orange traffic cone at Huntington station.jpg | Ser Amantio di Nicolao | CC BY-SA 4.0 |
+
+`presets.json` holds d1-2B's answers for each preset, measured on the IQ-9075.

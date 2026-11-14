@@ -178,17 +178,37 @@
   }
 
   // ---------- a photo of anything, placed on the runway ----------
-  function placePhoto(file) {
-    if (!file || !file.type.startsWith('image/')) return;
+  function placeImage(src) {
     const img = new Image();
     img.onload = () => {
       const h = 130, w = Math.min(230, h * img.naturalWidth / img.naturalHeight);
       sim.photo = { img, x: 320, y: RY, w, h: w * img.naturalHeight / img.naturalWidth };
       setMode('sim');
     };
-    img.src = URL.createObjectURL(file);
+    img.src = src;
+  }
+  function placePhoto(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    placeImage(URL.createObjectURL(file));
   }
   $('#s-photo').onchange = (e) => { placePhoto(e.target.files[0]); e.target.value = ''; };
+
+  // Preset photos, each checked with d1-2B on the board beforehand (static/presets.json).
+  const PRESETS = [
+    ['capy_baby', 'Baby capybara'], ['capy_family', 'Capybara family'], ['capy_portrait', 'Capybara'],
+    ['dog', 'Dog'], ['deer', 'Deer'], ['goose', 'Goose'], ['car', 'Car'], ['cone', 'Traffic cone'],
+  ];
+  async function loadPresets() {
+    let checked = {};
+    try { checked = await (await fetch('/static/presets.json', { cache: 'no-store' })).json(); } catch (e) { /* not checked yet */ }
+    $('#presets').innerHTML = PRESETS.map(([id, label]) => {
+      const c = checked[id];
+      const note = c ? `${Math.round(c.p_blocked * 100)}% blocked · ${c.what} ${Math.round((c.what_probs[c.what] || 0) * 100)}%` : 'not checked yet';
+      return `<button class="preset" data-id="${id}"><img src="/static/img/presets/${id}.jpg" alt=""><b>${label}</b><small>d1: ${note}</small></button>`;
+    }).join('');
+    document.querySelectorAll('.preset').forEach((b) => { b.onclick = () => placeImage(`/static/img/presets/${b.dataset.id}.jpg`); });
+  }
+  loadPresets();
   const wrap = $('#viewwrap');
   wrap.addEventListener('dragover', (e) => { e.preventDefault(); wrap.classList.add('dragging'); });
   wrap.addEventListener('dragleave', () => wrap.classList.remove('dragging'));
