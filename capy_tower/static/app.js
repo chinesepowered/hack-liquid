@@ -10,8 +10,9 @@
   const video = $('#video');
   const capyImg = new Image(); capyImg.src = '/static/img/capybara.png';
 
-  let mode = 'sim', camOn = false, sending = false, state = null, lastDecisionT = null;
-  const sim = { capy: null, cone: null };
+  let mode = 'sim', camOn = false, sending = false, lastDecisionT = null;
+  let lastRadioT = null, d1Since = null, lastCounts = { decisions: 0, skipped: 0 };
+  const sim = { capy: null, cone: null, photo: null };
   const phases = { departure: { phase: null, start: 0 }, arrival: { phase: null, start: 0 } };
 
   // ---------- simulated runway (what the board sees in SIM mode) ----------
@@ -34,9 +35,9 @@
     // runway
     c.fillStyle = '#5c5f64'; c.fillRect(20, RY - RHW, W - 40, RHW * 2);
     c.fillStyle = '#f2f2f2';
-    for (let x = 70; x < 500; x += 44) c.fillRect(x, RY - 2, 26, 4);         // centerline
+    for (let x = 70; x < 500; x += 44) c.fillRect(x, RY - 2, 26, 4);
     for (let i = 0; i < 6; i++) { c.fillRect(592, RY - RHW + 6 + i * 11, 18, 6); c.fillRect(30, RY - RHW + 6 + i * 11, 18, 6); }
-    c.save(); c.translate(540, RY); c.rotate(-Math.PI / 2);                     // "28" at the east threshold
+    c.save(); c.translate(540, RY); c.rotate(-Math.PI / 2);
     c.font = 'bold 34px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText('28', 0, 0); c.restore();
     c.save(); c.translate(92, RY); c.rotate(Math.PI / 2);
@@ -49,6 +50,14 @@
     c.fillStyle = '#ff7a00';
     c.beginPath(); c.moveTo(x, y - 30); c.lineTo(x + 15, y + 17); c.lineTo(x - 15, y + 17); c.closePath(); c.fill();
     c.fillStyle = '#fff'; c.fillRect(x - 8, y - 6, 16, 6); c.fillRect(x - 11, y + 5, 22, 5);
+  }
+
+  function drawPhoto(c) {
+    const p = sim.photo; if (!p) return;
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowBlur = 10; c.shadowOffsetY = 4;
+    c.drawImage(p.img, p.x - p.w / 2, p.y - p.h / 2, p.w, p.h);
+    c.restore();
   }
 
   function stepCapy(dt) {
@@ -123,6 +132,7 @@
     if (mode === 'sim') {
       stepCapy(dt); drawRunway(sctx);
       if (sim.cone) drawCone(sctx, sim.cone.x, sim.cone.y);
+      drawPhoto(sctx);
       drawCapy(sctx);
     } else drawCamera(sctx);
     vctx.drawImage(scene, 0, 0);
@@ -131,13 +141,20 @@
   }
   requestAnimationFrame(frame);
 
+  // ---------- pipeline strip ----------
+  const pulse = (id, cls = 'flash', ms = 700) => {
+    const el = $(id); el.classList.add(cls); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove(cls), ms);
+  };
+
   // ---------- frames to the board ----------
   function sendFrame() {
     if (sending || (mode === 'camera' && !camOn)) return;
     sending = true;
     scene.toBlob(async (blob) => {
-      try { await fetch('/api/frame?source=' + mode, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob }); }
-      catch (e) { /* board unreachable; the poll shows it */ }
+      try {
+        await fetch('/api/frame?source=' + mode, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+        pulse('#p-cam', 'flash', 350);
+      } catch (e) { /* board unreachable; the poll shows it */ }
       sending = false;
     }, 'image/jpeg', 0.82);
   }
@@ -156,8 +173,26 @@
     mode = m;
     $('#m-sim').classList.toggle('on', m === 'sim'); $('#m-cam').classList.toggle('on', m === 'camera');
     $('#simctl').classList.toggle('hidden', m !== 'sim'); $('#simbadge').classList.toggle('hidden', m !== 'sim');
+    $('#p-cam small').textContent = m === 'sim' ? 'simulated runway' : 'laptop camera';
     if (m === 'camera' && !camOn) startCamera();
   }
+
+  // ---------- a photo of anything, placed on the runway ----------
+  function placePhoto(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const img = new Image();
+    img.onload = () => {
+      const h = 130, w = Math.min(230, h * img.naturalWidth / img.naturalHeight);
+      sim.photo = { img, x: 320, y: RY, w, h: w * img.naturalHeight / img.naturalWidth };
+      setMode('sim');
+    };
+    img.src = URL.createObjectURL(file);
+  }
+  $('#s-photo').onchange = (e) => { placePhoto(e.target.files[0]); e.target.value = ''; };
+  const wrap = $('#viewwrap');
+  wrap.addEventListener('dragover', (e) => { e.preventDefault(); wrap.classList.add('dragging'); });
+  wrap.addEventListener('dragleave', () => wrap.classList.remove('dragging'));
+  wrap.addEventListener('drop', (e) => { e.preventDefault(); wrap.classList.remove('dragging'); placePhoto(e.dataTransfer.files[0]); });
 
   // ---------- controls ----------
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -169,7 +204,7 @@
   };
   $('#s-cone').onclick = () => { sim.cone = { x: 230, y: RY - 4 }; };
   $('#s-clear').onclick = () => {
-    sim.cone = null;
+    sim.cone = null; sim.photo = null;
     if (sim.capy) Object.assign(sim.capy, { tx: 420, ty: 395, leaving: true });
   };
   $('#s-base').onclick = () => post('/api/baseline');
@@ -182,20 +217,37 @@
     departed: ['departed', ''], inbound: ['inbound', ''], holding: ['circling, wants to land', 'wait'],
     cleared_land: ['cleared to land', 'go'], go_around: ['GO AROUND', 'stop'], landed: ['landed', ''],
   };
+  const NICE = { capybara: 'a capybara', wildlife: 'an animal', person: 'a person', vehicle: 'a vehicle', debris: 'debris', unknown: 'something' };
   const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const fmt = (v, unit = '') => (v === null || v === undefined) ? '–' : `${v}${unit}`;
 
-  function badge(el, text, cls) { el.textContent = text; el.className = 'badge ' + (cls || ''); }
+  function badge(el, text, cls) { el.textContent = text; el.className = el.className.includes('big') ? 'badge big ' + (cls || '') : 'badge ' + (cls || ''); }
 
   function render(s) {
     const pollNow = performance.now();
     // badges
     const wifiUp = (s.network.wifi || []).some((w) => w.state === 'up');
-    badge($('#b-net'), s.network.uplink ? (wifiUp ? 'Wi-Fi on · uplink present' : 'uplink present') : 'NO UPLINK · offline', s.network.uplink ? 'warn' : 'ok');
+    badge($('#b-net'), s.network.uplink ? (wifiUp ? 'ONLINE · Wi-Fi on' : 'ONLINE · uplink present') : '✈ OFFLINE · no route off the board', s.network.uplink ? 'warn' : 'ok');
     badge($('#b-lfm'), s.lfm && s.lfm.ready ? `LFM3-1.7B · ${String(s.lfm.compute || '').toUpperCase()} · GenieX` : 'LFM3 server not reachable', s.lfm && s.lfm.ready ? 'ok' : 'bad');
     const g = s.status === 'starting' ? ['loading ' + (s.detail || ''), 'warn'] : s.gate === 'd1' ? ['d1-2B · CPU', 'ok'] : ['rule gate (fallback)', 'warn'];
     badge($('#b-gate'), g[0], g[1]);
     $('#rulectl').classList.toggle('hidden', s.gate !== 'rule');
+    $('#p-d1 b').textContent = s.gate === 'rule' ? 'Pixel rule' : '👀 d1-2B';
+
+    // pipeline
+    $('#p-d1').classList.toggle('on', s.busy === 'd1');
+    $('#p-lfm').classList.toggle('on', s.busy === 'lfm');
+    const m = s.metrics;
+    if (m.decisions !== lastCounts.decisions || m.skipped !== lastCounts.skipped) pulse('#p-gate');
+    lastCounts = { decisions: m.decisions, skipped: m.skipped };
+
+    // d1 progress
+    if (s.busy === 'd1') {
+      if (d1Since === null) d1Since = pollNow;
+      const est = m.gate_ms_median || 7600;
+      $('#d1prog').style.width = Math.min(96, ((pollNow - d1Since) / est) * 100) + '%';
+      $('#d1wait').classList.remove('hidden');
+    } else { d1Since = null; $('#d1prog').style.width = '0'; $('#d1wait').classList.add('hidden'); }
 
     // runway ribbon
     const r = s.runway, rib = $('#ribbon');
@@ -214,7 +266,7 @@
     }).join('');
 
     // Capy
-    const tower = s.radio.filter((m) => m.who.startsWith('TOWER'));
+    const tower = s.radio.filter((x) => x.who.startsWith('TOWER'));
     const last = tower[tower.length - 1];
     let mood = 'chill';
     if (s.status === 'starting' || (s.busy === 'd1' && r.status !== 'closed')) mood = 'alert';
@@ -231,18 +283,23 @@
     else if (s.busy === 'lfm') $('#saymeta').textContent = '📻 writing the radio call (LFM3-1.7B on the NPU)…';
 
     // radio transcript
-    $('#radio').innerHTML = s.radio.slice().reverse().map((m) => {
-      const meta = m.source === 'lfm3' ? `LFM3 · ${fmt(m.ms, ' ms')}` : m.source === 'pilot' ? 'pilot' : 'template';
-      return `<div class="msg ${m.who.startsWith('TOWER') ? 'tower' : ''}"><span class="who">${esc(m.who)}</span>${esc(m.text)}<span class="meta">${esc(m.t.slice(11, 19))} · ${meta}</span></div>`;
+    const newest = s.radio.length ? s.radio[s.radio.length - 1].t : null;
+    if (newest && newest !== lastRadioT) { if (lastRadioT !== null) pulse('#p-radio'); lastRadioT = newest; }
+    $('#radio').innerHTML = s.radio.slice().reverse().map((x, i) => {
+      const meta = x.source === 'lfm3' ? `LFM3 · ${fmt(x.ms, ' ms')}` : x.source === 'pilot' ? 'pilot' : 'template';
+      const fresh = Date.now() - Date.parse(x.t) < 2500 ? ' fresh' : '';
+      return `<div class="msg ${x.who.startsWith('TOWER') ? 'tower' : ''}${fresh}"><span class="who">${esc(x.who)}</span>${esc(x.text)}<span class="meta">${esc(x.t.slice(11, 19))} · ${meta}</span></div>`;
     }).join('');
 
     // decision
     const d = s.decision;
     if (d) {
-      if (d.t !== lastDecisionT) { lastDecisionT = d.t; $('#d-img').src = '/api/decided.jpg?t=' + encodeURIComponent(d.t); }
+      if (d.t !== lastDecisionT) { lastDecisionT = d.t; $('#d-img').src = '/api/decided.jpg?t=' + encodeURIComponent(d.t); pulse('#p-pol'); }
       $('#d-meta').textContent = `${d.gate === 'd1' ? 'd1-2B' : 'rule'} · ${fmt(d.gate_ms, ' ms')} · ${d.t.slice(11, 19)} UTC`;
-      const pb = d.p_blocked ?? 0;
-      let html = `<div class="bar main"><div class="lbl"><span>P(something on the runway)</span><span>${(pb * 100).toFixed(0)}%</span></div>
+      const pb = d.p_blocked ?? 0, blocked = pb >= r.threshold;
+      const verdict = blocked ? `🚫 ${(NICE[d.what] || 'something').replace(/^./, (c) => c.toUpperCase())} on the runway` : '✅ Runway looks empty';
+      let html = `<div class="verdict ${blocked ? 'bad' : 'ok'}">${esc(verdict)}</div>
+        <div class="bar main ${blocked ? '' : 'okfill'}"><div class="lbl"><span>P(something on the runway)</span><span>${(pb * 100).toFixed(0)}%</span></div>
         <div class="trk"><div class="fill" style="width:${pb * 100}%"></div><div class="mark" style="left:${r.threshold * 100}%"></div></div></div>`;
       const probs = Object.entries(d.what_probs || {}).sort((x, y) => y[1] - x[1]).slice(0, 4);
       for (const [k, v] of probs) {
@@ -252,7 +309,6 @@
     }
 
     // metrics
-    const m = s.metrics;
     const skipped = m.frames_in ? Math.round((m.skipped / m.frames_in) * 100) : 0;
     const tiles = [
       ['d1 decision · CPU', `${fmt(m.gate_ms_median, '')}<small> ms median</small>`],
@@ -273,7 +329,7 @@
   async function poll() {
     try {
       const res = await fetch('/api/state', { cache: 'no-store' });
-      state = await res.json(); render(state);
+      render(await res.json());
     } catch (e) {
       badge($('#b-net'), 'board unreachable', 'bad');
     }

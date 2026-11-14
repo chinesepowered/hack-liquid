@@ -12,15 +12,21 @@ import time
 
 from PIL import Image, ImageChops, ImageStat
 
-STATE = ("Fixed tower camera picture of runway 28 at a small airport. The runway is the long grey "
-         "paved strip with white markings; grass is on both sides.")
+# The state text tells d1 what kind of picture it is looking at.
+STATES = {
+    "sim": ("Fixed tower camera picture of runway 28 at a small airport. The runway is the long grey "
+            "paved strip with white markings; grass is on both sides."),
+    "camera": ("Live camera picture of a tabletop model of runway 28: a sheet of paper or the plain table "
+               "surface is the runway. A bare, empty surface means the runway is empty. A photo of an animal "
+               "shown on a phone screen counts as that animal on the runway."),
+}
 
 WHAT = {
     "capybara": "A capybara, a large brown rodent",
     "wildlife": "Another animal, such as a deer, dog, goose or bird",
-    "person": "A person on foot",
+    "person": "A person, or a person's hand or face",
     "vehicle": "A car, truck or aircraft",
-    "debris": "A loose object, such as a traffic cone, bottle, phone, bag or tool",
+    "debris": "A loose object, such as a traffic cone, bottle, bag or tool",
     "nothing": "Nothing, the runway is empty",
 }
 
@@ -94,18 +100,26 @@ class D1Gate:
         self.max_side = max_side
         self.decide(Image.new("RGB", (160, 100), (110, 110, 110)))  # warm-up: first call pays setup costs
 
-    def decide(self, img):
+    def decide(self, img, source="sim"):
         img = downscale(img, self.max_side)
+        state = STATES.get(source, STATES["sim"])
         t0 = time.perf_counter()
         with self.torch.inference_mode():
-            res = self.model.system_one(STATE, QUESTIONS, media=[img])
+            res = self.model.system_one(state, QUESTIONS, media=[img])
         ms = (time.perf_counter() - t0) * 1000
         a = res["answers"]
         what = a["what"]
         usage = res.get("usage") or {}
-        return {"gate": "d1", "p_blocked": round(float(a["blocked"]["noul"]), 4),
+        probs = _probs(what, list(WHAT))
+        p_question = float(a["blocked"]["noul"])
+        # Two independent answers: "is it blocked?" and "what is on it?". The runway counts as
+        # blocked by the stronger of the two, so a confident "capybara" closes it even when the
+        # yes/no answer is hesitant.
+        p_blocked = max(p_question, 1.0 - probs.get("nothing", 1.0))
+        return {"gate": "d1", "source": source, "p_blocked": round(p_blocked, 4),
+                "p_blocked_question": round(p_question, 4),
                 "what": what.get("choice"), "what_conf": round(float(what.get("confidence") or 0), 4),
-                "what_probs": _probs(what, list(WHAT)), "gate_ms": round(ms, 1),
+                "what_probs": probs, "gate_ms": round(ms, 1),
                 "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")}
 
 
@@ -120,7 +134,7 @@ class RuleGate:
     def set_baseline(self, img):
         self.baseline = small_gray(img, (128, 80))
 
-    def decide(self, img):
+    def decide(self, img, source="sim"):
         t0 = time.perf_counter()
         cur = small_gray(img, (128, 80))
         if self.baseline is None:
@@ -128,6 +142,7 @@ class RuleGate:
         diff = ImageChops.difference(cur, self.baseline).point(lambda v: 255 if v > self.pixel_delta else 0)
         share = ImageStat.Stat(diff).mean[0] / 255
         p = max(0.0, min(1.0, share / self.full_share))
-        return {"gate": "rule", "p_blocked": round(p, 4), "what": "unknown" if p >= 0.5 else "nothing",
+        return {"gate": "rule", "source": source, "p_blocked": round(p, 4),
+                "what": "unknown" if p >= 0.5 else "nothing",
                 "what_conf": None, "what_probs": {}, "gate_ms": round((time.perf_counter() - t0) * 1000, 1),
                 "changed_share": round(share, 4)}

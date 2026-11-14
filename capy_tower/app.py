@@ -219,7 +219,7 @@ class Agent(threading.Thread):
             with self.s.lock:
                 self.s.busy = "d1"
             try:
-                decision = self.gate.decide(img)
+                decision = self.gate.decide(img, obs.get("source", "sim"))
             finally:
                 with self.s.lock:
                     self.s.busy = None

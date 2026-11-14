@@ -10,21 +10,36 @@
 <header>
   <div class="brand">
     <span class="logo">CAPY TOWER</span>
-    <span class="sub">Runway 28 · always-on · zero network</span>
+    <span class="sub">Runway 28 · always-on · on a Qualcomm Dragonwing IQ-9075 with LiquidAI LFM3</span>
   </div>
   <div class="badges">
-    <span id="b-net" class="badge">network …</span>
+    <span id="b-net" class="badge big">network …</span>
     <span id="b-lfm" class="badge">LFM3-1.7B …</span>
     <span id="b-gate" class="badge">d1-2B …</span>
   </div>
 </header>
 
+<nav class="pipe" aria-label="What the board is doing">
+  <div class="stage" id="p-cam"><b>📷 Camera</b><small>laptop · sensor only</small></div>
+  <span class="arr">›</span>
+  <div class="stage" id="p-gate"><b>Change gate</b><small>skips quiet frames</small></div>
+  <span class="arr">›</span>
+  <div class="stage" id="p-d1"><b>👀 d1-2B</b><small>LiquidAI · CPU</small></div>
+  <span class="arr">›</span>
+  <div class="stage" id="p-pol"><b>Tower policy</b><small>code · allowlist</small></div>
+  <span class="arr">›</span>
+  <div class="stage" id="p-lfm"><b>📻 LFM3-1.7B</b><small>LiquidAI · Hexagon NPU</small></div>
+  <span class="arr">›</span>
+  <div class="stage" id="p-radio"><b>Radio + log</b><small>checked · JSONL</small></div>
+</nav>
+
 <main>
   <section class="left">
-    <div class="viewwrap">
+    <div class="viewwrap" id="viewwrap">
       <canvas id="view" width="640" height="400"></canvas>
       <div id="ribbon" class="ribbon wait">WAITING FOR THE RUNWAY CAMERA</div>
-      <div id="simbadge" class="simbadge">SIM</div>
+      <div id="simbadge" class="simbadge">SIMULATED CAMERA</div>
+      <div id="dropzone" class="dropzone">Drop a photo on the runway</div>
       <video id="video" playsinline muted></video>
     </div>
     <div class="controls">
@@ -34,6 +49,8 @@
       </div>
       <div id="simctl" class="row">
         <button id="s-capy">🐾 Capybara wanders on</button>
+        <label class="btn" for="s-photo">🖼 Put a photo on the runway</label>
+        <input id="s-photo" type="file" accept="image/*" hidden>
         <button id="s-cone">🚧 Drop a cone</button>
         <button id="s-clear">🧹 Clear the runway</button>
       </div>
@@ -43,9 +60,13 @@
     </div>
     <div class="panel">
       <h3>What Capy saw <small id="d-meta"></small></h3>
+      <div id="d1wait" class="d1wait hidden">
+        <span>👀 d1-2B is looking at the runway on the CPU</span>
+        <div class="prog"><div id="d1prog"></div></div>
+      </div>
       <div class="saw">
         <img id="d-img" alt="last frame the board decided on">
-        <div class="bars" id="bars"></div>
+        <div class="bars" id="bars"><div class="hint">Decisions appear here.</div></div>
       </div>
     </div>
   </section>
@@ -53,19 +74,15 @@
   <section class="right">
     <div class="panel capypanel">
       <svg id="capy" class="mood-chill" viewBox="0 0 200 190" aria-label="Capy the tower capybara">
-        <!-- ears -->
         <ellipse cx="54" cy="46" rx="14" ry="12" fill="#8a5a2e"/>
         <ellipse cx="146" cy="46" rx="14" ry="12" fill="#8a5a2e"/>
         <ellipse cx="55" cy="48" rx="7" ry="6" fill="#e9a3a0"/>
         <ellipse cx="145" cy="48" rx="7" ry="6" fill="#e9a3a0"/>
-        <!-- big round head and soft muzzle -->
         <ellipse cx="100" cy="108" rx="80" ry="72" fill="#c4874f"/>
         <ellipse cx="100" cy="84" rx="56" ry="34" fill="#d09660" opacity=".55"/>
         <ellipse cx="100" cy="134" rx="46" ry="30" fill="#e6bb8a"/>
-        <!-- rosy cheeks -->
         <ellipse cx="50" cy="122" rx="15" ry="9" fill="#ff8fa3" opacity=".6"/>
         <ellipse cx="150" cy="122" rx="15" ry="9" fill="#ff8fa3" opacity=".6"/>
-        <!-- eyes, one set per mood -->
         <g class="eyes e-chill"><path d="M56 98 q11 9 22 0" /><path d="M122 98 q11 9 22 0" /></g>
         <g class="eyes e-alert">
           <ellipse cx="67" cy="98" rx="10" ry="12"/><ellipse cx="133" cy="98" rx="10" ry="12"/>
@@ -78,19 +95,15 @@
           <path d="M182 30 q9 14 0 21 q-9 -7 0 -21z" style="fill:#7cc8ff;stroke:none"/>
         </g>
         <g class="eyes e-happy"><path d="M56 102 q11 -14 22 0" /><path d="M122 102 q11 -14 22 0" /></g>
-        <!-- little nose with a shine -->
         <rect x="88" y="116" width="24" height="13" rx="6.5" fill="#4a2c14"/>
         <ellipse cx="95" cy="119.5" rx="3.5" ry="2" fill="#fff" opacity=".6"/>
-        <!-- mouths -->
         <path class="mouth m-calm" d="M90 138 q5 7 10 0 q5 7 10 0"/>
         <ellipse class="mouth m-alarmed" cx="100" cy="144" rx="7" ry="8"/>
-        <!-- headset -->
         <path d="M24 92 Q100 -6 176 92" stroke="#1d232b" stroke-width="7" fill="none" stroke-linecap="round"/>
         <rect x="14" y="84" width="18" height="32" rx="8" fill="#2a313b"/>
         <rect x="168" y="84" width="18" height="32" rx="8" fill="#2a313b"/>
         <path d="M24 114 Q30 150 62 152" stroke="#2a313b" stroke-width="4" fill="none" stroke-linecap="round"/>
         <circle cx="64" cy="152" r="6" fill="#2a313b"/>
-        <!-- the yuzu every capybara deserves -->
         <g class="yuzu">
           <circle cx="100" cy="30" r="17" fill="#f6c21c"/>
           <circle cx="94" cy="24" r="5" fill="#fff" opacity=".45"/>
@@ -123,7 +136,7 @@
     </div>
 
     <div class="panel">
-      <h3>Decision log <small id="logpath">logs/capy_tower.jsonl</small></h3>
+      <h3>Decision log <small>logs/capy_tower.jsonl on the board</small></h3>
       <pre id="log" class="log"></pre>
     </div>
   </section>
@@ -131,7 +144,7 @@
 
 <footer>
   Every model runs on the Qualcomm Dragonwing IQ-9075: d1-2B decides, LFM3-1.7B talks. No cloud, no API keys.
-  · Team chinese · @chinesepowered
+  · Team chinese · @chinesepowered · <a href="/static/slides.html">slides</a>
 </footer>
 <script src="/static/app.js"></script>
 </body>
