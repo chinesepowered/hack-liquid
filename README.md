@@ -25,7 +25,7 @@ An **always-on local agent** that needs nothing but power:
 1. **Watch.** A camera (or a simulated runway for the demo) streams frames to the board. A pixel-change gate skips frames where nothing moved, so the models stay idle on a quiet runway.
 2. **Decide.** **d1-2B** answers typed questions about each changed frame in one forward pass: *is anything on the runway?* and *what is it?*
 3. **Act.** Plain code turns that decision into tower actions from an allowlist: go around, cancel takeoff, close the runway, hold short, dispatch the wildlife crew, reopen, clear to land, clear for takeoff.
-4. **Talk.** **LFM3-1.7B** on the NPU phrases each instruction as a radio call. A safety check makes sure the call says what the code decided, or a fixed template is sent instead.
+4. **Talk.** **LFM3-1.7B** on the NPU phrases each instruction as a radio call. A safety check makes sure the call says what the code decided, or a fixed template is sent instead. The board then says the call out loud on its own speaker (espeak-ng, offline; LiquidAI LFM3-Audio voice is next).
 5. **Recover on its own.** When the runway clears, aircraft that were told to wait are cleared automatically, arrivals first.
 6. **Log.** Every decision, action and radio call goes to `logs/capy_tower.jsonl` and the live tower screen.
 
