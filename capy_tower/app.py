@@ -38,6 +38,7 @@ from PIL import Image  # noqa: E402
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import gates  # noqa: E402
+import voice as vc  # noqa: E402
 import tower as tw  # noqa: E402
 from lfm_client import DEFAULT_MODEL, DEFAULT_SERVER, LFM  # noqa: E402
 
@@ -112,6 +113,8 @@ class Agent(threading.Thread):
         self.last_decision_t = 0.0
         self.log_path = Path(args.log)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.voice = vc.Voice(mode=args.voice, log=self._log)
+        self.voice.start()
         self.frames_dir = Path(args.save_frames) if args.save_frames else None
         if self.frames_dir:
             self.frames_dir.mkdir(parents=True, exist_ok=True)
@@ -256,6 +259,7 @@ class Agent(threading.Thread):
             radio = self.radio_call(act)
             who = {"PILOT_CALL": "TOWER", "OPS": "TOWER→OPS", "ALL": "TOWER→ALL"}[tw.station(act)]
             self._radio(who, radio["text"], radio | {"action": act["action"]})
+            self.voice.say(radio["text"])
             done.append({"action": act["action"], "target": act.get("target"), "auto": act.get("auto"),
                          "executed": True, "radio": radio})
         loop_ms = round((time.perf_counter() - t_loop) * 1000, 1)
@@ -344,6 +348,8 @@ def snapshot(s, t):
             },
         }
     out["network"] = network_status()
+    agent = getattr(s, "agent", None)
+    out["voice"] = agent.voice.info() if agent else None
     return out
 
 
@@ -429,6 +435,8 @@ def main():
     ap.add_argument("--llm", default=DEFAULT_MODEL)
     ap.add_argument("--compute", default="npu")
     ap.add_argument("--max-radio-tokens", type=int, default=48)
+    ap.add_argument("--voice", choices=["lfm3", "espeak", "off"], default="espeak",
+                    help="speak tower calls on the board speaker (lfm3 = LiquidAI LFM3-Audio via llama.cpp)")
     ap.add_argument("--no-lfm", action="store_true", help="template radio calls only (UI testing)")
     ap.add_argument("--no-warmup", dest="warmup", action="store_false")
     ap.add_argument("--log", default=str(HERE.parent / "logs" / "capy_tower.jsonl"))
@@ -438,6 +446,7 @@ def main():
 
     shared, tower = Shared(), tw.Tower(args.threshold, args.clear_threshold)
     agent = Agent(shared, tower, args)
+    shared.agent = agent
     agent.start()
     httpd = ThreadingHTTPServer((args.host, args.port), make_handler(shared, tower))
     print(f"Capy Tower on http://{args.host}:{args.port}  (gate={args.gate}, log={args.log})", flush=True)
