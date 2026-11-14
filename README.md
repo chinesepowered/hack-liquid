@@ -8,7 +8,7 @@ Capy Tower watches a runway camera and, the moment a capybara (or a person, vehi
 
 *Live on the IQ-9075 with Wi-Fi off: d1-2B is 99% sure there is a capybara on the runway, the Cirrus is sent around, and the runway is closed.*
 
-🎬 **Demo video (1:53, captioned):** [`docs/video/capy_tower_demo.mp4`](docs/video/capy_tower_demo.mp4). A screen recording of the real board running the full demo with its Wi-Fi off; the runway camera is the simulated feed. The narration voice was made with ElevenLabs for the video only; Capy Tower itself calls no outside service.
+🎬 **Demo video (1:42, captioned):** [`docs/video/capy_tower_demo.mp4`](docs/video/capy_tower_demo.mp4). A screen recording of the real board running the full demo with its Wi-Fi off; the runway camera is the simulated feed. The narration voice was made with ElevenLabs for the video only; Capy Tower itself calls no outside service.
 
 Team **chinese** · [@chinesepowered](https://x.com/chinesepowered) on X · *On-Device AI Hackathon: Cleared for Takeoff*, LiquidAI x Qualcomm, San Francisco, November 13, 2026
 
